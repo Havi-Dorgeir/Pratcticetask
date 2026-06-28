@@ -1,83 +1,59 @@
 precision highp float;
 
 uniform float uTime;
+uniform vec3 uWaterColor;   // Глубокий цвет воды
+uniform vec3 uShallowColor; // Цвет на поверхности/мелководье
 
-uniform vec3 uColor;
-varying float vHeight; 
-varying vec3 vNormal;
+varying vec3 vNormal;       // Нормаль меша (из вершинного шейдера)
+varying vec3 vViewPosition; // Позиция камеры относительно точки (нужно передать из vertex)
 varying vec2 vWorldXZ;
-uniform vec3 uDeep;
-uniform vec3 uMid;
-uniform vec3 uCrest;
-vec2 hash2 (vec2 p) {
-    p = vec2(dot(p, vec2(127.1, 311.7)),
-        dot(p, vec2(269.5, 183.3)));
-    return fract(sin(p) * 43758.5453);
+
+// Простая функция плавного шума для волн
+float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
 }
 
-// ─── Шум Вороного ─────────────────────────────────────────────────────────
-// Возвращает: x = расстояние до ближайшей точки (F1)
-//             y = расстояние до второй точки (F2)
-vec3 voronoi(in vec2 p) {
-    vec2  i_st = floor(p);
-    vec2  f_st = fract(p);
-
-    float m_dist1 = 0.7;  // F1 — расстояние до ближайшей
-    float m_dist2 = 0.7;  
-    vec2   m_id ;
-
-    for (int y = -1; y <= 1; y++) {
-        for (int x = -1; x <= 1; x++) {
-            vec2  neighbor = vec2(float(x), float(y));
-            vec2  point    = hash2(i_st + neighbor);
-            vec2  diff     = neighbor + point - f_st;
-            float dist     = dot(diff, diff);  
-
-            if (dist < m_dist1) {
-                m_dist2 = m_dist1;
-                m_dist1 = dist;
-                m_id = i_st +  neighbor;
-            } else if (dist < m_dist2) {
-                m_dist2 = dist;
-            }
-        }
-    }
-    float id = hash2(m_id).x;
-
-    return vec3(sqrt(m_dist1), sqrt(m_dist2), id);
+float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i + vec2(0.0,0.0)), hash(i + vec2(1.0,0.0)), u.x),
+               mix(hash(i + vec2(0.0,1.0)), hash(i + vec2(1.0,1.0)), u.x), u.y);
 }
 
 void main()
 {
-    float cellSize = 0.005; 
+    // 1. Создаем движение волн, смешивая два слоя шума на разной скорости
+    vec2 uv = vWorldXZ * 0.1;
+    float waveA = noise(uv + vec2(uTime * 0.02, uTime * 0.01));
+    float waveB = noise(uv * 2.0 - vec2(uTime * 0.01, uTime * 0.03));
+    float waveFinal = (waveA + waveB) * 0.5;
 
-    vec2 uv1 = vWorldXZ * cellSize;
-    vec3 v1 = voronoi(uv1);
+    // 2. Расчет эффекта Френеля (зависимость прозрачности от угла взгляда)
+    // Нормализуем вектор взгляда камеры и нормаль поверхности
+    vec3 normal = normalize(vNormal);
     
-    // Слегка уменьшим безумный множитель 19.9 до 2.0, чтобы границы плит были аккуратнее
-    vec2 uv2 = (vWorldXZ * (cellSize * 0.9) + v1.xy * 2.0);
-    vec3 v2  = voronoi(uv2); // Убрали умножение на 15.0, мешающее адекватному расчету edge
+    // Вектор от точки на воде к камере (предполагаем, что камера вверху)
+    // Для идеального расчета viewDir нужно передавать из Vertex Shader
+    vec3 viewDir = normalize(vec3(0.0, 1.0, 0.5)); 
     
-    // Плавный анимированный шум для цвета внутри лавы
-    vec2 uv  = vWorldXZ * cellSize + vec2(uTime * 0.005, uTime * 0.05);
-    vec3 v = voronoi(uv);
-    
-    // Расстояние до края ячейки (0.0 — самый центр плиты, ~0.5+ — стыки между ними)
-    float edge = v2.y - v2.x;
-    
-    // ИСПРАВЛЕНО: Теперь значение строго от 0.0 до 1.0. 
-    // Настраивайте ширину трещин вторым параметром smoothstep (например, вместо 0.1 поставьте 0.05 или 0.2)
-    float lava = 1.0 - smoothstep(0.0, 0.1, edge); 
-    
-    // Мягко смешиваем uMid и uCrest для самой лавы
-    vec3 lavaColor = mix(uMid, uCrest, v.x); 
-    
-    // uDeep теперь является глубокой подложкой, uMid — цветом самой плиты
-    vec3 baseColor = mix(uDeep, uMid, 0.2);
-    
-    // ИСПРАВЛЕНО: Так как lava теперь падает до 0.0 в центрах плит, 
-    // там будет отлично виден ваш uDeep/baseColor!
-    vec3 finalColor = mix(baseColor, lavaColor, lava);
+    // Косинус угла между взглядом и нормалью
+    float fresnel = dot(viewDir, normal);
+    // Инвертируем и возводим в степень для контраста
+    fresnel = clamp(1.0 - fresnel, 0.0, 1.0);
+    fresnel = pow(fresnel, 3.0); // Чем выше степень, тем прозрачнее вода при взгляде сверху
 
-    gl_FragColor = vec4(finalColor, 1.0);
+    // 3. Смешиваем цвета воды
+    // В местах, где волны выше — цвет чуть светлее
+    vec3 baseColor = mix(uWaterColor, uShallowColor, waveFinal * 0.4);
+    
+    // Добавим легкие белые блики на гребнях волн
+    float foam = smoothstep(0.6, 0.8, waveFinal);
+    baseColor = mix(baseColor, vec3(1.0), foam * 0.3);
+
+    // 4. Прозрачность (Alpha)
+    // Базовая прозрачность воды + увеличиваем непрозрачность под углом (Френель)
+    float alpha = mix(0.4, 0.9, fresnel); 
+
+    gl_FragColor = vec4(baseColor, alpha);
 }

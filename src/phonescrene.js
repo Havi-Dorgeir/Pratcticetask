@@ -77,9 +77,8 @@ const waterMaterial = new THREE.ShaderMaterial({
    
     uniforms: {
     uTime:  { value: 0.0 },
-    uDeep:  { value: new THREE.Color('#b1eaf7') },
-    uMid:   { value: new THREE.Color('#dddbe9') },
-    uCrest: { value: new THREE.Color('#35eded') }, 
+    uWaterColor: { value: new THREE.Color(0x006677) }, 
+    uShallowColor: { value: new THREE.Color(0x00bfff) },
     },
     
    
@@ -89,7 +88,6 @@ const waterMaterial = new THREE.ShaderMaterial({
     
     transparent: true,
     depthWrite: false, 
-    depthTest: true
 });
 const loader = new GLTFLoader();
 loader.load("/model/PHONE.gltf", function (glb) {

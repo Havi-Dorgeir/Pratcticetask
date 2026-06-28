@@ -29,9 +29,9 @@ void main() {
 vec3 tangentX = normalize(vec3(2.0 * eps, hR - hL, 0.0));
 vec3 tangentZ = normalize(vec3(0.0, hU - hD, 2.0 * eps));
 
-// нормаль = перекрёстное произведение касательных
-vNormal = normalize(cross(tangentZ, tangentX));
-vWorldXZ = position.xz; ;
+
+vNormal = normalize(normalMatrix * normal);
+vWorldXZ = (modelMatrix * vec4(position, 1.0)).xz;
     
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
 }

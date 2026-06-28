@@ -15,7 +15,7 @@ float getWaveY(float x, float z, float time)
 }
 
 void main() {
-     float eps = 0.01;
+     float eps = 0.001;
     vec3 pos = position;
     
     

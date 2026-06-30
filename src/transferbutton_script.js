@@ -4,6 +4,7 @@ const coinbutton = document.querySelector('#coinscrenebutton');
 const about_1st_screenbutton = document.querySelector('#about_1st_screencrenebutton');
 const flower_screenbutton = document.querySelector('#flower_screencrenebutton');
 const phone_screenbutton = document.querySelector('#phone_screencrenebutton');
+const pillars_screencrenebutton = document.querySelector('#pillars_screencrenebutton');
 
 button.addEventListener('click', () => {
   
@@ -29,4 +30,8 @@ flower_screenbutton.addEventListener('click', () => {
 phone_screenbutton.addEventListener('click', () => {
     // Укажите здесь нужный адрес для второй кнопки, например:
     window.open('/phonescene.html', '_blank'); 
+});
+pillars_screencrenebutton.addEventListener('click', () => {
+    // Укажите здесь нужный адрес для второй кнопки, например:
+    window.open('/pilarsscene.html', '_blank'); 
 });
